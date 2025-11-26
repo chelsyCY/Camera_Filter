@@ -11,6 +11,10 @@ face_mesh = mp_face_mesh.FaceMesh(
 
 # TURN OOOONNNN CAMERA 
 cam = cv2.VideoCapture(0)
+capture_count = 0
+capture_feedback = False
+feedback_frames = 0
+frozen_frame = None
 
 filters = {
     '1': cv2.imread("eye.png", cv2.IMREAD_UNCHANGED),
@@ -62,34 +66,6 @@ def overlay_filter(frame, x_center, y_center, filter_img, scale=1.0):
     # Blend onto frame
     frame[y1:y2, x1:x2] = (1 - filter_mask) * frame[y1:y2, x1:x2] + filter_mask * filter_bgr
 
-# while True:
-#     ret, frame= cam.read()
-#     if not ret:
-#         break
-
-#     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-#     results = face_mesh.process(frame_rgb)
-
-#     filter_img = filters.get(current_filter_key)
-
-#     if results.multi_face_landmarks and filter_img is not None:
-#         for face_landmarks in results.multi_face_landmarks:
-#             h, w, _ = frame.shape
-
-#             left_eye = face_landmarks.landmark[33]
-#             right_eye = face_landmarks.landmark[263]
-
-#             left_x, left_y = int(left_eye.x * w), int(left_eye.y * h)
-#             right_x, right_y = int(right_eye.x * w), int(right_eye.y * h)
-
-#             eye_distance = abs(right_x - left_x)
-#             scale = eye_distance / 60.0  
-
-#             # Overlay 
-#             # add for crown, dog?
-#             overlay_filter(frame, left_x, left_y, filter_img, scale)
-#             overlay_filter(frame, right_x, right_y, filter_img, scale)
-
 
 def draw_filter_selector(frame):
     for key, pos in filter_ui_positions.items():
@@ -113,15 +89,7 @@ def draw_filter_selector(frame):
                 # No transparency → normal paste
                 frame[y-30:y+30, x-30:x+30] = small
 
-
-    # cv2.imshow("Filter", frame)
-    # key = cv2.waitKey(1) & 0xFF
-
-    # if key == ord('q'):
-    #     break
-    # elif chr(key) in filters.keys():
-    #     current_filter_key = chr(key)
-    #     print(f"Switched to filter {current_filter_key}")
+    print(f"Switched to filter {current_filter_key}")
 
 ## add
 def mouse_click(event, x, y, flags, param):
@@ -136,6 +104,11 @@ def mouse_click(event, x, y, flags, param):
 
 cv2.namedWindow("Filter")
 cv2.setMouseCallback("Filter", mouse_click)
+
+def capturePicture(frame, capture_count):
+    filename = f"capture_{capture_count}.png"
+    cv2.imwrite(filename, frame)
+    print(f"Saved: {filename}")
 
 while True:
     ret, frame = cam.read()
@@ -209,15 +182,32 @@ while True:
                 scale = face_width / 120.0
 
                 overlay_filter(frame, nose_x, nose_y, filter_img, scale)
-
+            
+    
     # Draw filter selection bubbles
     draw_filter_selector(frame)
 
+    if capture_feedback and frozen_frame is not None:
+        preview = cv2.resize(frozen_frame, (200, 120))
+        x1, y1 = w-220, 20
+        x2, y2=x1+200, y1+120
+        cv2.rectangle(frame, (x1-2, y1-2), (x2+2, y2+2), (255, 255, 255), 2)
+        frame[y1:y2, x1:x2] = preview
+        feedback_frames -= 1
+        if feedback_frames <= 0:
+            capture_feedback = False 
     cv2.imshow("Filter", frame)
     key = cv2.waitKey(1) & 0xFF
 
     if key == ord('q'):
         break
+    elif key == ord('c'):
+        capture_count += 1
+        capturePicture(frame, capture_count)
+        frozen_frame = frame.copy()
+        capture_feedback = True
+        feedback_frames = 45
+
     elif chr(key) in filters.keys():
         current_filter_key = chr(key)
         print(f"Switched to filter {current_filter_key}")
